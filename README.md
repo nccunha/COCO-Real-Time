@@ -1,6 +1,6 @@
 # DeskVision: Real-Time YOLO on NVIDIA AGX Orin
 
-![DeskVision Demo - YOLOv8 on AGX Orin](yolo.png)
+<img src="image/yolo.png" alt="DeskVision Demo - YOLOv8 on AGX Orin" width="85%"/>
 
 Real-time object detection optimized for the **NVIDIA Jetson AGX Orin**, focusing on a high-performance hardware-accelerated pipeline that bypasses heavy SDKs like DeepStream.
 
@@ -8,7 +8,7 @@ Real-time object detection optimized for the **NVIDIA Jetson AGX Orin**, focusin
 
 ## Technical Stack
 
-* **Hardware Connection:** FRAMOS FSM:GO IMX 678 sensor connected via **FPA-4.A/AGX adapter** (AGX DevKit).
+* **Hardware Connection:** FRAMOS FSM:GO IMX678 sensor connected via **FPA-4.A/AGX adapter** (AGX DevKit).
 * **Camera Interface:** CSI via `nvarguscamerasrc` (NVIDIA Argus / ISP).
 * **Inference Engine:** Ultralytics YOLOv8.
 * **Backend:** TensorRT (.engine) for zero-PyTorch runtime overhead.
