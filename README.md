@@ -22,7 +22,6 @@ Real-time object detection optimized for the **NVIDIA Jetson AGX Orin**, focusin
 
 * **Multi-Model Backend:** Runtime selection between YOLOv8 and RT-DETR architectures.
 * **Hardware ISP Integration:** Full utilization of the Jetson ISP for color correction, scaling, and white balance via Argus.
-* **Zero-Copy Intent:** Optimized memory handling by offloading resizing and color conversion (NV12 to BGRx) to hardware blocks (nvvidconv).
 * **TensorRT Quantization:** FP16 inference leveraging Orin's 275 TOPS for low-latency execution.
 
 ## Requirements & Setup
