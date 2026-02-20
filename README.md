@@ -8,22 +8,22 @@ Real-time object detection optimized for the **NVIDIA Jetson AGX Orin**, focusin
 
 ## Technical Stack
 
-* **Hardware Connection:** FRAMOS FSM:GO IMX678 sensor connected via **FPA-4.A/AGX adapter** (AGX DevKit).
+* **Hardware Connection:** Support for the entire FRAMOS FSM:GO ecosystem (e.g., IMX678, IMX900) connected via the **FPA-4.A/AGX** adapter.
 * **Camera Interface:** CSI via `nvarguscamerasrc` (NVIDIA Argus / ISP).
-* **Inference Engine:** Ultralytics YOLOv8.
-* **Backend:** TensorRT (.engine) for zero-PyTorch runtime overhead.
-* **Pipeline:** GStreamer + OpenCV `appsink`.
+*  **Inference Engines**:
+    * YOLOv8: Optimized CNN for maximum throughput.
+    * RT-DETR: Transformer-based architecture for superior global context and accuracy.
+* **Backend**: TensorRT (.engine) for zero-PyTorch runtime overhead and Ampere core utilization.
+* **Pipeline**: GStreamer + OpenCV appsink with hardware-based scaling and color conversion.
   
 ---
 
 ## Features
 
-* **Hardware ISP Integration:** Fully utilizes the Jetson Image Signal Processor for color correction, scaling, and white balance.
-* **TensorRT Optimization:** FP16 quantized inference for maximum throughput on the Orin GPU.
-* **Low Latency:** Optimized memory handling by offloading color conversion (NV12 -> BGRx) to hardware blocks.
-* **Embedded Focus:** Designed specifically for JetPack 6.x and L4T environments.
-
----
+* **Multi-Model Backend:** Runtime selection between YOLOv8 and RT-DETR architectures.
+* **Hardware ISP Integration:** Full utilization of the Jetson ISP for color correction, scaling, and white balance via Argus.
+* **Zero-Copy Intent:** Optimized memory handling by offloading resizing and color conversion (NV12 to BGRx) to hardware blocks (nvvidconv).
+* **TensorRT Quantization:** FP16 inference leveraging Orin's 275 TOPS for low-latency execution.
 
 ## Requirements & Setup
 
@@ -43,15 +43,23 @@ pip install ultralytics opencv-python
 sudo apt install -y python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-tools
 ```
 
-### 3. Export YOLOv8 TensorRT Engine
-From the Jetson, run the export command to build the engine optimized for the Orin's Ampere architecture:
+### 3. Building TensorRT Engines
+To run at peak performance, you must export the models to native TensorRT engines. This process optimizes the model graph for the Orin's Ampere GPU.
+
+For YOLOv8 (CNN):
 ```bash
 yolo export model=yolov8n.pt format=engine imgsz=640 half=True device=0
 ```
 **Output:** `yolov8n.engine`
 
+For RT-DETR (Transformer):
+```bash
+yolo export model=rtdetr-l.pt format=engine imgsz=640 half=True device=0
+```
+**Output:** `rtdetr-l.engine`
+
 **Notes:**
-* First export can take a few minutes (TensorRT build).
+* The RT-DETR export may take 5 to 10 minutes as it optimizes complex attention layers.
 * This uses the native TensorRT installed with JetPack.
 * Missing `onnxslim` or `onnxruntime-gpu` warnings can be ignored. The engine is still built correctly.
 
@@ -78,28 +86,28 @@ pipeline_str = (
 On Jetson platforms:
 * The ISP tuning file is loaded by the **Argus stack itself**.
 * Files placed in `/var/nvidia/nvcam/settings/camera_overrides.isp` are automatically picked up by Argus.
-* There is **no supported** `tuning-file` or `sensor-tuning-file` property on `nvarguscamerasrc`.
-
-So this is expected and correct:
-1. You do **not** pass the ISP file through GStreamer.
-2. You only need to restart the pipeline after updating the file in the settings folder.
+  
 
 ---
 
 ## Why TensorRT instead of .pt?
 
 **Advantages:**
-* **No PyTorch dependency at runtime:** Lighter deployment environment.
-* **Lower Latency:** Optimized specifically for the target GPU.
-* **Lower CPU Usage:** Offloads inference computation more effectively.
-* **Deterministic Deployment:** Consistent performance across runs.
+
+* **No PyTorch Dependency:** Drastically reduces runtime memory footprint.
+* **Ampere Optimization:** Specifically utilizes Tensor Cores for matrix multiplication.
+* **Lower CPU Usage:** The CPU is only used for pipeline management, not for heavy lifting.
+* **Consistent Latency:** Critical for real-time robotics and industrial automation.
 
 ---
 
 ## Usage
 
-Run the deployment script to start the hardware-accelerated inference:
+Run the main inference pipeline and select your preferred model via the terminal prompt:
+
 ```bash
 python main.py
 ```
-* **ESC:** Safely close the pipeline and windows.
+* **Selection 1:** YOLOv8n (Lightweight and Ultra-fast).
+* **Selection 2:** RT-DETR-L (High accuracy Transformer).
+* **ESC/Q:** Safely close the hardware pipeline and windows.
