@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DeskVision (TensorRT-ready): Real-time YOLO on NVIDIA AGX Orin using GI/GStreamer capture.
+(TensorRT-ready): Real-time YOLO on NVIDIA AGX Orin using GI/GStreamer capture.
 - Captures frames from nvarguscamerasrc (CSI) via appsink.
 - Runs YOLO TensorRT engine (.engine) on GPU directly.
 - No PyTorch or CPU fallback needed.
@@ -26,7 +26,7 @@ WIDTH, HEIGHT, FPS = 1280, 720, 30   # 1280x720 @ 30 FPS
 MODEL_PATH = "yolov8n.engine"        # TensorRT engine
 CONF_THRESHOLD = 0.5
 IMG_SIZE = 640
-WINDOW_NAME = "DeskVision - YOLO (TensorRT GPU)"
+WINDOW_NAME = "COCO - YOLO (TensorRT GPU)"
 
 # -----------------------------
 # Init GStreamer pipeline
@@ -128,3 +128,4 @@ try:
 finally:
     pipeline.set_state(Gst.State.NULL)
     cv2.destroyAllWindows()
+
