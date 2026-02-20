@@ -1,75 +1,90 @@
 #!/usr/bin/env python3
 """
-(TensorRT-ready): Real-time YOLO on NVIDIA AGX Orin using GI/GStreamer capture.
-- Captures frames from nvarguscamerasrc (CSI) via appsink.
-- Runs YOLO TensorRT engine (.engine) on GPU directly.
-- No PyTorch or CPU fallback needed.
-
-Tips:
-- Start at 1280x720 for smoother FPS; increase to 1920x1080 after confirming stability.
-- Use FP16 engine for best FPS.
+  Real-time YOLO or RT-DETR on NVIDIA AGX Orin.
+- Hardware-accelerated GStreamer pipeline.
+- Selection between CNN (YOLO) and Transformer (RT-DETR) architectures.
+- Native TensorRT execution.
 """
 
 import time
+import os
+import sys
 import numpy as np
 import cv2
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
-from ultralytics import YOLO
+from ultralytics import YOLO, RTDETR
+
+# -----------------------------
+# Model Selection Prompt
+# -----------------------------
+def select_backend():
+    print("\n--- DeskVision Model Selector ---")
+    print("1: YOLOv8n (Fastest - CNN)")
+    print("2: RT-DETR-L (High Precision - Transformer)")
+    choice = input("Select model (1 or 2): ")
+
+    if choice == '1':
+        return "yolov8n.engine", YOLO, "DeskVision - YOLOv8n (TensorRT)"
+    elif choice == '2':
+        return "rtdetr-l.engine", RTDETR, "DeskVision - RT-DETR (TensorRT)"
+    else:
+        print("[Error] Invalid selection.")
+        sys.exit(1)
+
+MODEL_FILE, MODEL_CLASS, WINDOW_NAME = select_backend()
+
+if not os.path.exists(MODEL_FILE):
+    print(f"\n[Error] {MODEL_FILE} not found!")
+    print(f"Run: yolo export model={MODEL_FILE.replace('.engine', '.pt')} format=engine half=True imgsz=640")
+    sys.exit(1)
 
 # -----------------------------
 # Config
 # -----------------------------
 SENSOR_ID = 0
-WIDTH, HEIGHT, FPS = 1280, 720, 30   # 1280x720 @ 30 FPS
-MODEL_PATH = "yolov8n.engine"        # TensorRT engine
+WIDTH, HEIGHT = 1280, 720
+IMG_SIZE = 640  # Match engine size
 CONF_THRESHOLD = 0.5
-IMG_SIZE = 640
-WINDOW_NAME = "COCO - YOLO (TensorRT GPU)"
 
 # -----------------------------
 # Init GStreamer pipeline
 # -----------------------------
 Gst.init(None)
+
+# Optimization: Resizing to 640x640 directly in hardware (nvvidconv)
 pipeline_str = (
-    f"nvarguscamerasrc sensor-id={SENSOR_ID} sensor-mode=0 wbmode=1 ! " 
+    f"nvarguscamerasrc sensor-id={SENSOR_ID} sensor-mode=0 wbmode=1 ! "
     f"video/x-raw(memory:NVMM), width={WIDTH}, height={HEIGHT}, format=NV12 ! "
-    f"nvvidconv ! video/x-raw, format=BGRx ! "
+    f"nvvidconv ! video/x-raw, width={IMG_SIZE}, height={IMG_SIZE}, format=BGRx ! "
     f"videoconvert ! video/x-raw, format=BGR ! "
     f"appsink name=appsink emit-signals=true max-buffers=1 drop=true"
 )
+
 pipeline = Gst.parse_launch(pipeline_str)
 appsink = pipeline.get_by_name("appsink")
-if appsink is None:
-    raise RuntimeError("Failed to create appsink from pipeline")
 pipeline.set_state(Gst.State.PLAYING)
 
 # -----------------------------
-# Load YOLO TensorRT engine
+# Load Engine
 # -----------------------------
 try:
-    model = YOLO(MODEL_PATH)
-    print(f"[Info] Loaded TensorRT engine: {MODEL_PATH}")
+    model = MODEL_CLASS(MODEL_FILE)
+    print(f"[Info] Running {WINDOW_NAME}")
 except Exception as e:
     pipeline.set_state(Gst.State.NULL)
-    raise RuntimeError(f"Failed to load YOLO engine at {MODEL_PATH}: {e}")
+    raise RuntimeError(f"Failed to load engine: {e}")
 
-# -----------------------------
-# Helper to pull frame from appsink
-# -----------------------------
 def pull_frame():
     sample = appsink.emit("pull-sample")
-    if sample is None:
-        return None
+    if sample is None: return None
     buf = sample.get_buffer()
     caps = sample.get_caps()
     s = caps.get_structure(0)
-    w = s.get_value("width")
-    h = s.get_value("height")
+    w, h = s.get_value("width"), s.get_value("height")
     ok, mapinfo = buf.map(Gst.MapFlags.READ)
-    if not ok:
-        return None
+    if not ok: return None
     try:
         arr = np.frombuffer(mapinfo.data, dtype=np.uint8).reshape((h, w, 3))
     finally:
@@ -82,20 +97,14 @@ def pull_frame():
 prev_t = time.time()
 frame_count = 0
 fps_txt = 0.0
-printed_shape = False
 
 try:
     while True:
         frame = pull_frame()
         if frame is None:
-            time.sleep(0.005)
             continue
 
-        if not printed_shape:
-            print(f"[Info] Frame shape: {frame.shape}")
-            printed_shape = True
-
-        # Predict with TensorRT engine; no device argument needed
+        # Inference
         results = model.predict(
             source=frame,
             conf=CONF_THRESHOLD,
@@ -104,23 +113,15 @@ try:
         )
         annotated = results[0].plot()
 
-        # FPS counter
+        # FPS calculation
         frame_count += 1
         now = time.time()
         if now - prev_t >= 1.0:
             fps_txt = frame_count / (now - prev_t)
-            prev_t = now
-            frame_count = 0
+            prev_t, frame_count = now, 0
 
-        cv2.putText(
-            annotated,
-            f"FPS: {fps_txt:.1f}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.0,
-            (0, 255, 0),
-            2,
-        )
+        cv2.putText(annotated, f"Model: {MODEL_FILE} | FPS: {fps_txt:.1f}", 
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
         cv2.imshow(WINDOW_NAME, annotated)
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -128,4 +129,3 @@ try:
 finally:
     pipeline.set_state(Gst.State.NULL)
     cv2.destroyAllWindows()
-
