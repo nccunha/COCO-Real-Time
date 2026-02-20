@@ -1,6 +1,6 @@
-# DeskVision: Real-Time YOLO on NVIDIA AGX Orin
+# COCO: Real-Time YOLO on NVIDIA AGX Orin
 
-<img src="image/yolo.png" alt="DeskVision Demo - YOLOv8 on AGX Orin" width="85%"/>
+<img src="image/yolo.png" alt="COCO Demo - YOLOv8 on AGX Orin" width="85%"/>
 
 Real-time object detection optimized for the **NVIDIA Jetson AGX Orin**, focusing on a high-performance hardware-accelerated pipeline that bypasses heavy SDKs like DeepStream.
 
@@ -100,6 +100,6 @@ So this is expected and correct:
 
 Run the deployment script to start the hardware-accelerated inference:
 ```bash
-python deskvision.py
+python main.py
 ```
 * **ESC:** Safely close the pipeline and windows.
